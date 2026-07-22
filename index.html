@@ -55,24 +55,32 @@
 
     <header>🎨 서울 주요 문화행사 및 전시 가이드</header>
     
-    <!-- 필터 버튼 영역 -->
-    <div class="filter-bar">
-        <button class="filter-btn active" onclick="changeCategory('art', event)">🎨 미술관/전시/갤러리</button>
-        <button class="filter-btn" onclick="changeCategory('music', event)">🎵 음악회/연주회</button>
-        <button class="filter-btn" onclick="changeCategory('all', event)">🌐 전체 보기</button>
+<!-- 필터 전체 영역 -->
+<div class="filter-wrapper" style="margin: 15px 0; display: flex; flex-direction: column; gap: 10px;">
+    
+    <!-- 1. 장르 필터 Group -->
+    <div class="filter-group">
+        <span style="font-weight: bold; margin-right: 8px;">장르:</span>
+        <button class="btn-genre active" onclick="setGenre('all', this)">전체</button>
+        <button class="btn-genre" onclick="setGenre('art', this)">🎨 미술/전시</button>
+        <button class="btn-genre" onclick="setGenre('music', this)">🎵 음악회/연주회</button>
     </div>
 
-    <div class="container">
-        <div class="sidebar">
-            <div id="gallery-list">파이썬 서버와 통신하여 실시간 전시 데이터를 동기화하는 중입니다...</div>
-            <div class="pagination" id="pagination"></div>
-        </div>
-        <div id="map"></div>
+    <!-- 2. 기간 필터 Group -->
+    <div class="filter-group">
+        <span style="font-weight: bold; margin-right: 8px;">기간:</span>
+        <button class="btn-period active" onclick="setPeriod('all', this)">전체</button>
+        <button class="btn-period" onclick="setPeriod('current', this)">🔥 진행 중</button>
+        <button class="btn-period" onclick="setPeriod('upcoming', this)">🗓️ 예정</button>
     </div>
+
+</div>
 
     <script>
         // 전역 변수
         let rawExhibitionsData = [];
+	let currentGenre = 'all';   // 👈 [추가]
+	let currentPeriod = 'all';  // 👈 [추가]
         let filteredData = [];
         let activeMarkers = [];
         let currentCategory = 'art';
@@ -113,27 +121,42 @@
 
 	// 백엔드 API 호출
 	async function loadExhibitions() {
-	    try {
-        	const response = await fetch('https://museum-culture-	guide-1.onrender.com/api/exhibitions');
-	        const result = await response.json();
-
-                if (result.status === 'success') {
-                    rawExhibitionsData = result.data;
-                    console.log('✅ 총 동기화된 데이터:', rawExhibitionsData.length, '건');
-                    
-                    // 인기도 및 중요도 순 정렬 적용
-                    sortDataByPopularity();
-                    
-                    // 초기 필터링 적용 (미술관/전시)
-                    filterAndRender();
-                } else {
-                    listContainer.innerHTML = '데이터를 불러오는 데 실패했습니다.';
-                }
-            } catch (error) {
-                console.error('❌ 데이터 로딩 실패:', error);
-                listContainer.innerHTML = '서버 통신 오류가 발생했습니다.';
-            }
+    try {
+        const response = await fetch('https://museum-culture-guide-1.onrender.com/api/exhibitions');
+        const result = await response.json();
+        
+        if (result.status === 'success') {
+            rawExhibitions = result.data;
+            
+            // ❌ 기존: renderExhibitions(rawExhibitions); 
+            // ⭕ 변경: 첫 화면 진입 시 초기 필터(전체/전체)를 적용하여 호출
+            applyFilters(); 
         }
+    } catch (error) {
+        console.error('데이터 로드 실패:', error);
+    }
+}
+// 👇 [추가] 여기 독립된 공간에 세 함수를 연속해서 넣어주세요!
+    function setGenre(genre, btn) {
+        currentGenre = genre;
+        document.querySelectorAll('.btn-genre').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        applyFilters();
+    }
+
+    function setPeriod(period, btn) {
+        currentPeriod = period;
+        document.querySelectorAll('.btn-period').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        applyFilters();
+    }
+
+    function applyFilters() {
+        // (제시해 드린 applyFilters 내용 전체)
+    }
+
+    // ... 기존 renderExhibitions() 등 다른 함수 시작 ...
+
 
         // 인기도 및 규모 기준 정렬 함수
         function sortDataByPopularity() {
