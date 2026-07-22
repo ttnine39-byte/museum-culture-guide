@@ -12,10 +12,11 @@
         header { background: #111; color: #fff; padding: 15px 20px; text-align: left; font-size: 1.2rem; font-weight: bold; box-shadow: 0 2px 5px rgba(0,0,0,0.2); z-index: 10; }
         
         /* 필터 바 스타일 */
-        .filter-bar { display: flex; gap: 8px; padding: 10px 20px; background: #222; border-top: 1px solid #333; z-index: 10; }
-        .filter-btn { padding: 8px 16px; font-size: 0.85rem; border: none; border-radius: 20px; background: #444; color: #ccc; cursor: pointer; transition: all 0.2s; }
-        .filter-btn:hover { background: #555; color: #fff; }
-        .filter-btn.active { background: #00c73c; color: #fff; font-weight: bold; }
+        .filter-wrapper { padding: 12px 20px; background: #222; display: flex; flex-direction: column; gap: 8px; z-index: 10; }
+        .filter-group { display: flex; align-items: center; gap: 8px; color: #fff; font-size: 0.9rem; }
+        .btn-genre, .btn-period { padding: 6px 14px; font-size: 0.85rem; border: none; border-radius: 20px; background: #444; color: #ccc; cursor: pointer; transition: all 0.2s; }
+        .btn-genre:hover, .btn-period:hover { background: #555; color: #fff; }
+        .btn-genre.active, .btn-period.active { background: #00c73c; color: #fff; font-weight: bold; }
 
         .container { display: flex; flex: 1; overflow: hidden; position: relative; }
         
@@ -55,46 +56,51 @@
 
     <header>🎨 서울 주요 문화행사 및 전시 가이드</header>
     
-<!-- 필터 전체 영역 -->
-<div class="filter-wrapper" style="margin: 15px 0; display: flex; flex-direction: column; gap: 10px;">
-    
-    <!-- 1. 장르 필터 Group -->
-    <div class="filter-group">
-        <span style="font-weight: bold; margin-right: 8px;">장르:</span>
-        <button class="btn-genre active" onclick="setGenre('all', this)">전체</button>
-        <button class="btn-genre" onclick="setGenre('art', this)">🎨 미술/전시</button>
-        <button class="btn-genre" onclick="setGenre('music', this)">🎵 음악회/연주회</button>
+    <!-- 필터 전체 영역 -->
+    <div class="filter-wrapper">
+        <!-- 1. 장르 필터 Group -->
+        <div class="filter-group">
+            <span style="font-weight: bold; margin-right: 8px;">장르:</span>
+            <button class="btn-genre active" onclick="setGenre('all', this)">전체</button>
+            <button class="btn-genre" onclick="setGenre('art', this)">🎨 미술/전시</button>
+            <button class="btn-genre" onclick="setGenre('music', this)">🎵 음악회/연주회</button>
+        </div>
+
+        <!-- 2. 기간 필터 Group -->
+        <div class="filter-group">
+            <span style="font-weight: bold; margin-right: 8px;">기간:</span>
+            <button class="btn-period active" onclick="setPeriod('all', this)">전체</button>
+            <button class="btn-period" onclick="setPeriod('current', this)">🔥 진행 중</button>
+            <button class="btn-period" onclick="setPeriod('upcoming', this)">🗓️ 예정</button>
+        </div>
     </div>
 
-    <!-- 2. 기간 필터 Group -->
-    <div class="filter-group">
-        <span style="font-weight: bold; margin-right: 8px;">기간:</span>
-        <button class="btn-period active" onclick="setPeriod('all', this)">전체</button>
-        <button class="btn-period" onclick="setPeriod('current', this)">🔥 진행 중</button>
-        <button class="btn-period" onclick="setPeriod('upcoming', this)">🗓️ 예정</button>
+    <div class="container">
+        <div class="sidebar">
+            <div id="gallery-list"></div>
+            <div id="pagination" class="pagination"></div>
+        </div>
+        <div id="map"></div>
     </div>
-
-</div>
 
     <script>
         // 전역 변수
         let rawExhibitionsData = [];
-	let currentGenre = 'all';   // 👈 [추가]
-	let currentPeriod = 'all';  // 👈 [추가]
+        let currentGenre = 'all';
+        let currentPeriod = 'all';
         let filteredData = [];
         let activeMarkers = [];
-        let currentCategory = 'art';
         let currentPage = 1;
         const itemsPerPage = 10;
 
-        // 주요 랜드마크 시설 목록 (인기도/규모 순 정렬용)
+        // 주요 랜드마크 시설 목록
         const popularVenues = [
             "국립현대미술관", "MMCA", "예술의전당", "한가람", "서울시립미술관", "SeMA", 
             "리움", "Leeum", "세종문화회관", "국립중앙박물관", "DDP", "동대문디자인플라자",
             "일민미술관", "금호미술관", "아트선재", "성곡미술관", "환기미술관"
         ];
 
-        // 주요 미술관 기초 메타 데이터 (좌표 매칭용)
+        // 주요 미술관 기초 메타 데이터
         const galleryBaseData = {
             "국립현대미술관 서울": { keywords: ["국립현대", "MMCA"], lat: 37.5786, lng: 126.9801 },
             "서울시립미술관 본관": { keywords: ["서울시립", "SeMA"], lat: 37.5641, lng: 126.9738 },
@@ -119,46 +125,88 @@
         const listContainer = document.getElementById('gallery-list');
         const paginationContainer = document.getElementById('pagination');
 
-	// 백엔드 API 호출
-	async function loadExhibitions() {
-    try {
-        const response = await fetch('https://museum-culture-guide-1.onrender.com/api/exhibitions');
-        const result = await response.json();
-        
-        if (result.status === 'success') {
-            rawExhibitions = result.data;
-            
-            // ❌ 기존: renderExhibitions(rawExhibitions); 
-            // ⭕ 변경: 첫 화면 진입 시 초기 필터(전체/전체)를 적용하여 호출
-            applyFilters(); 
+        // 백엔드 API 호출
+        async function loadExhibitions() {
+            try {
+                const response = await fetch('https://museum-culture-guide-1.onrender.com/api/exhibitions');
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    rawExhibitionsData = result.data;
+                    sortDataByPopularity();
+                    applyFilters(); 
+                }
+            } catch (error) {
+                console.error('데이터 로드 실패:', error);
+            }
         }
-    } catch (error) {
-        console.error('데이터 로드 실패:', error);
-    }
-}
-// 👇 [추가] 여기 독립된 공간에 세 함수를 연속해서 넣어주세요!
-    function setGenre(genre, btn) {
-        currentGenre = genre;
-        document.querySelectorAll('.btn-genre').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        applyFilters();
-    }
 
-    function setPeriod(period, btn) {
-        currentPeriod = period;
-        document.querySelectorAll('.btn-period').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        applyFilters();
-    }
+        function setGenre(genre, btn) {
+            currentGenre = genre;
+            document.querySelectorAll('.btn-genre').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            applyFilters();
+        }
 
-    function applyFilters() {
-        // (제시해 드린 applyFilters 내용 전체)
-    }
+        function setPeriod(period, btn) {
+            currentPeriod = period;
+            document.querySelectorAll('.btn-period').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            applyFilters();
+        }
 
-    // ... 기존 renderExhibitions() 등 다른 함수 시작 ...
+        // 통합 필터 적용 함수
+        function applyFilters() {
+            currentPage = 1; // 필터 적용 시 1페이지로 이동
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
 
+            filteredData = rawExhibitionsData.filter(item => {
+                // 1. 장르 필터링
+                const categoryType = getCategoryType(item);
+                let genreMatch = true;
+                if (currentGenre === 'art') genreMatch = (categoryType === 'art' || categoryType === 'other');
+                if (currentGenre === 'music') genreMatch = (categoryType === 'music');
 
-        // 인기도 및 규모 기준 정렬 함수
+                // 2. 기간 필터링
+                let periodMatch = true;
+                const startDateStr = item.STRTDATE || (item.DATE ? item.DATE.split('~')[0] : '');
+                const endDateStr = item.END_DATE || (item.DATE ? item.DATE.split('~')[1] : '');
+
+                const startDate = startDateStr ? new Date(startDateStr) : null;
+                const endDate = endDateStr ? new Date(endDateStr) : null;
+
+                if (currentPeriod === 'current') {
+                    // 진행 중: 시작일 <= 오늘 및 종료일 >= 오늘
+                    if (startDate && startDate > today) periodMatch = false;
+                    if (endDate && endDate < today) periodMatch = false;
+                } else if (currentPeriod === 'upcoming') {
+                    // 예정: 시작일 > 오늘
+                    if (startDate && startDate <= today) periodMatch = false;
+                }
+
+                return genreMatch && periodMatch;
+            });
+
+            renderFilteredData();
+        }
+
+        function renderFilteredData() {
+            if (filteredData.length === 0) {
+                listContainer.innerHTML = '<div style="padding:20px; color:#666; text-align:center;">해당 조건의 데이터가 없습니다.</div>';
+                paginationContainer.innerHTML = '';
+                clearMapMarkers();
+                return;
+            }
+
+            const startIndex = (currentPage - 1) * itemsPerPage;
+            const pageData = filteredData.slice(startIndex, startIndex + itemsPerPage);
+
+            renderPageItems(pageData);
+            renderPaginationControls();
+        }
+
+        // 인기도 정렬 함수
         function sortDataByPopularity() {
             rawExhibitionsData.sort((a, b) => {
                 const titleA = (a.TITLE || a.CODENAME || '');
@@ -169,22 +217,20 @@
                 const scoreA = getPopularityScore(titleA, placeA);
                 const scoreB = getPopularityScore(titleB, placeB);
 
-                return scoreB - scoreA; // 점수가 높은 순으로 정렬
+                return scoreB - scoreA;
             });
         }
 
-        // 시설 인기도 점수 계산
         function getPopularityScore(title, place) {
             let score = 0;
             popularVenues.forEach((venue, index) => {
                 if (place.includes(venue) || title.includes(venue)) {
-                    score += (popularVenues.length - index) * 10; // 순위가 높을수록 가산점
+                    score += (popularVenues.length - index) * 10;
                 }
             });
             return score;
         }
 
-        // 카테고리 판별 함수
         function getCategoryType(item) {
             const title = (item.TITLE || item.CODENAME || '').toLowerCase();
             const place = (item.PLACE || '').toLowerCase();
@@ -203,51 +249,10 @@
             return 'other';
         }
 
-        // 카테고리 변경 이벤트
-        function changeCategory(category, evt) {
-            currentCategory = category;
-            currentPage = 1; // 1페이지로 리셋
-
-            document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
-            if (evt && evt.target) evt.target.classList.add('active');
-
-            filterAndRender();
-        }
-
-        // 필터링 및 현재 페이지 데이터 렌더링
-        function filterAndRender() {
-            // 1. 카테고리 필터 적용
-            filteredData = rawExhibitionsData.filter(item => {
-                if (currentCategory === 'all') return true;
-                const itemCategory = getCategoryType(item);
-                if (currentCategory === 'art') return itemCategory === 'art' || itemCategory === 'other';
-                if (currentCategory === 'music') return itemCategory === 'music';
-                return true;
-            });
-
-            if (filteredData.length === 0) {
-                listContainer.innerHTML = '<div style="padding:20px; color:#666; text-align:center;">해당 조건의 데이터가 없습니다.</div>';
-                paginationContainer.innerHTML = '';
-                clearMapMarkers();
-                return;
-            }
-
-            // 2. 현재 페이지 데이터 계산
-            const startIndex = (currentPage - 1) * itemsPerPage;
-            const pageData = filteredData.slice(startIndex, startIndex + itemsPerPage);
-
-            // 3. 카드 및 마커 그려주기
-            renderPageItems(pageData);
-
-            // 4. 페이지네이션 버튼 생성
-            renderPaginationControls();
-        }
-
-        // 현재 페이지의 items만 화면 및 지도에 표시
         function renderPageItems(items) {
             clearMapMarkers();
             listContainer.innerHTML = '';
-            listContainer.scrollTop = 0; // 스크롤을 맨 위로 리셋
+            listContainer.scrollTop = 0;
 
             items.forEach((item) => {
                 const title = item.TITLE || item.CODENAME || '정보 없음';
@@ -258,7 +263,6 @@
                 const categoryType = getCategoryType(item);
                 const categoryLabel = categoryType === 'art' ? '🎨 전시' : categoryType === 'music' ? '🎵 음악회' : '🏛️ 문화';
 
-                // 좌표 추출
                 let lat = parseFloat(item.LAT || item.X_COORD);
                 let lng = parseFloat(item.LOT || item.Y_COORD);
 
@@ -272,7 +276,6 @@
                     }
                 }
 
-                // 카드 HTML 생성
                 const card = document.createElement('div');
                 card.className = 'gallery-card';
                 card.innerHTML = `
@@ -286,7 +289,6 @@
                     ${orgLink !== '#' ? `<a href="${orgLink}" target="_blank" class="link-btn" onclick="event.stopPropagation();">🔗 상세 정보 보기</a>` : ''}
                 `;
 
-                // 네이버 지도 마커 생성
                 if (!isNaN(lat) && !isNaN(lng)) {
                     const position = new naver.maps.LatLng(lat, lng);
                     const marker = new naver.maps.Marker({
@@ -326,14 +328,12 @@
             });
         }
 
-        // 페이지네이션 버튼 컨트롤 생성
         function renderPaginationControls() {
             paginationContainer.innerHTML = '';
             const totalPages = Math.ceil(filteredData.length / itemsPerPage);
 
             if (totalPages <= 1) return;
 
-            // [이전] 버튼
             const prevBtn = document.createElement('button');
             prevBtn.className = 'page-btn';
             prevBtn.innerText = '이전';
@@ -341,12 +341,11 @@
             prevBtn.onclick = () => {
                 if (currentPage > 1) {
                     currentPage--;
-                    filterAndRender();
+                    renderFilteredData();
                 }
             };
             paginationContainer.appendChild(prevBtn);
 
-            // 페이지 번호 버튼 (최대 5개 범위만 노출)
             const maxVisiblePages = 5;
             let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
             let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
@@ -361,12 +360,11 @@
                 pageBtn.innerText = i;
                 pageBtn.onclick = () => {
                     currentPage = i;
-                    filterAndRender();
+                    renderFilteredData();
                 };
                 paginationContainer.appendChild(pageBtn);
             }
 
-            // [다음] 버튼
             const nextBtn = document.createElement('button');
             nextBtn.className = 'page-btn';
             nextBtn.innerText = '다음';
@@ -374,19 +372,17 @@
             nextBtn.onclick = () => {
                 if (currentPage < totalPages) {
                     currentPage++;
-                    filterAndRender();
+                    renderFilteredData();
                 }
             };
             paginationContainer.appendChild(nextBtn);
         }
 
-        // 지도 마커 초기화
         function clearMapMarkers() {
             activeMarkers.forEach(marker => marker.setMap(null));
             activeMarkers = [];
         }
 
-        // 페이지 로드 시 백엔드 API 호출
         window.onload = loadExhibitions;
     </script>
 </body>
