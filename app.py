@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 import json
-from flask import Flask, jsonify
+import os
+from flask import Flask, jsonify, send_file
 from flask_cors import CORS
 import requests
 import xml.etree.ElementTree as ET
@@ -11,8 +12,17 @@ CORS(app)
 # 1. 서울시 API 키
 SEOUL_API_KEY = "626542794374746e353657776b5577"
 
-# 2. 공공데이터포털(문화포털) 서비스키 (Decoding 키 사용 권장)
+# 2. 공공데이터포털(문화포털) 서비스키
 CULTURE_API_KEY = "fc9e72622a547b6e71d08e379172588be1ab895cea97b9ea9beebfc35dc44dc1"
+
+
+# -------------------------------------------------------------
+# 🌐 [추가됨] 루트(/) 주소로 접속했을 때 index.html 화면을 보여주는 설정
+# -------------------------------------------------------------
+@app.route('/')
+def home():
+    # 같은 폴더 내의 index.html을 직접 열어줍니다.
+    return send_file('index.html')
 
 
 def fetch_seoul_api():
@@ -49,15 +59,13 @@ def fetch_culture_events():
         print(f"[문화포털 전시 API] 응답 코드: {res.status_code}")
 
         if res.status_code == 200:
-            # 응답 내용 확인용 (오류 메시지가 들어있는지 확인)
             if "SERVICE_KEY_IS_NOT_REGISTERED_ERROR" in res.text:
-                print("❌ 문화포털 키 인증 실패: 서비스키를 확인하세요 (Encoding/Decoding 교범 적용 필요)")
+                print("❌ 문화포털 키 인증 실패: 서비스키를 확인하세요")
                 return []
 
             events = []
             try:
                 root = ET.fromstring(res.content)
-                # perforList 또는 item 태그 모두 탐색
                 items = root.findall(".//perforList") or root.findall(".//item")
                 for item in items:
                     title = item.findtext("title") or item.findtext("TITLE") or ""
