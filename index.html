@@ -111,12 +111,12 @@
         const listContainer = document.getElementById('gallery-list');
         const paginationContainer = document.getElementById('pagination');
 
-        // 백엔드 API 호출
-        async function loadExhibitions() {
-            try {
-                const response = await fetch('[https://seoul-gallery-guide.onrender.com/api/exhibitions](https://seoul-gallery-guide.onrender.com/api/exhibitions)');
-                const result = await response.json();
-                
+	// 백엔드 API 호출
+	async function loadExhibitions() {
+	    try {
+        	const response = await fetch('https://museum-culture-	guide-1.onrender.com/api/exhibitions');
+	        const result = await response.json();
+
                 if (result.status === 'success') {
                     rawExhibitionsData = result.data;
                     console.log('✅ 총 동기화된 데이터:', rawExhibitionsData.length, '건');
