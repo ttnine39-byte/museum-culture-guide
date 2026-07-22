@@ -114,7 +114,7 @@
         // 백엔드 API 호출
         async function loadExhibitions() {
             try {
-                const response = await fetch('http://localhost:5000/api/exhibitions');
+                const response = await fetch('[https://seoul-gallery-guide.onrender.com/api/exhibitions](https://seoul-gallery-guide.onrender.com/api/exhibitions)');
                 const result = await response.json();
                 
                 if (result.status === 'success') {
