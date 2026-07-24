@@ -19,7 +19,7 @@
       padding: 20px;
     }
 
-    /* 헤더 및 로고 타이틀 (조건 2: 아트-흰색, 하트-분홍색) */
+    /* 헤더 및 로고 타이틀 (아트: 흰색, 하트: 분홍색) */
     header {
       text-align: left;
       padding: 20px 0 30px 0;
@@ -47,7 +47,7 @@
       margin: 0 auto;
     }
 
-    /* 리스트 및 카드 스타일 (조건 4: 왼쪽에 글자 배치) */
+    /* 리스트 및 카드 스타일 (왼쪽에 글자 배치) */
     .event-list {
       display: flex;
       flex-direction: column;
@@ -147,16 +147,16 @@
     <!-- 이벤트 리스트 영역 -->
     <main>
       <div id="event-list" class="event-list">
-        <div class="loading">KOPIS 데이터를 불러오는 중입니다...</div>
+        <div class="loading">KOPIS 데이터를 안전하게 불러오는 중입니다...</div>
       </div>
     </main>
   </div>
 
   <script>
-    // 1. KOPIS API 키 (조건 1)
+    // 1. KOPIS API 키
     const KOPIS_API_KEY = "4650ca9b3cd14d5eb489f753faf9d070";
 
-    // 유명/대형 미술관 및 주요 전시장 우선순위 리스트 (조건 4)
+    // 유명/대형 미술관 및 주요 전시장 우선순위 리스트
     const FAMOUS_MUSEUMS = [
       "국립현대미술관",
       "서울시립미술관",
@@ -175,88 +175,105 @@
     ];
 
     /**
-     * KOPIS API 데이터 연동 함수
+     * KOPIS API 데이터 연동 함수 (다중 프록시 안전 장치 적용)
      */
     async function fetchArtEvents() {
-  const today = new Date();
-  const stdate = today.toISOString().slice(0, 10).replace(/-/g, "");
-  const eddate = "20261231";
+      const today = new Date();
+      const stdate = today.toISOString().slice(0, 10).replace(/-/g, "");
+      const eddate = "20261231";
 
-  // KOPIS 원본 API URL
-  const targetUrl = `https://www.kopis.or.kr/openApi/rest/pblprfr?service=${KOPIS_API_KEY}&stdate=${stdate}&eddate=${eddate}&cpage=1&rows=100&prfstate=02`;
+      const targetUrl = `http://www.kopis.or.kr/openApi/rest/pblprfr?service=${KOPIS_API_KEY}&stdate=${stdate}&eddate=${eddate}&cpage=1&rows=100&prfstate=02`;
 
-  // corsproxy.io 우회 서비스 적용
-  const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
+      // 안정적인 우회 프록시 URL 후보군
+      const proxies = [
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
+        `https://cors-anywhere.herokuapp.com/${targetUrl}`
+      ];
 
-  try {
-    const response = await fetch(proxyUrl);
-    if (!response.ok) throw new Error("API 요청 실패");
-    
-    const xmlText = await response.text();
-    
-    const parser = new DOMParser();
-    const xmlDoc = parser.parseFromString(xmlText, "text/xml");
-    const items = Array.from(xmlDoc.getElementsByTagName("db"));
+      let xmlText = null;
 
-    const eventList = items.map(item => ({
-      id: item.getElementsByTagName("mt20")[0]?.textContent || "",
-      title: item.getElementsByTagName("prfnm")[0]?.textContent || "",
-      facility: item.getElementsByTagName("fcltynm")[0]?.textContent || "",
-      genre: item.getElementsByTagName("genrenm")[0]?.textContent || "",
-      startDate: item.getElementsByTagName("prfpdfrom")[0]?.textContent || "",
-      endDate: item.getElementsByTagName("prfpdto")[0]?.textContent || "",
-      poster: item.getElementsByTagName("poster")[0]?.textContent || ""
-    }));
+      // 성공할 때까지 순차적으로 프록시 시도
+      for (const proxyUrl of proxies) {
+        try {
+          const response = await fetch(proxyUrl);
+          if (response.ok) {
+            xmlText = await response.text();
+            if (xmlText && xmlText.includes("<db>")) break; // 데이터 정상 수신 확인
+          }
+        } catch (e) {
+          console.warn("프록시 연결 재시도 중...", e);
+        }
+      }
 
-    const sortedList = sortEvents(eventList);
-    renderList(sortedList);
+      if (!xmlText) {
+        document.getElementById("event-list").innerHTML = 
+          `<div class="loading">데이터를 불러올 수 없습니다.<br>로컬 파일(file://)로 바로 실행 중이시라면 웹 서버 환경이나 Chrome CORS 확장 프로그램을 켜고 실행해 보세요.</div>`;
+        return;
+      }
 
-  } catch (error) {
-    console.error("KOPIS API 호출 실패:", error);
-    document.getElementById("event-list").innerHTML = 
-      `<div class="loading">데이터를 불러오는 데 실패했습니다. 다시 시도해 주세요.</div>`;
-  }
-}
+      try {
+        // XML 데이터 파싱
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+        const items = Array.from(xmlDoc.getElementsByTagName("db"));
+
+        // 객체 형태로 변환
+        const eventList = items.map(item => ({
+          id: item.getElementsByTagName("mt20")[0]?.textContent || "",
+          title: item.getElementsByTagName("prfnm")[0]?.textContent || "",
+          facility: item.getElementsByTagName("fcltynm")[0]?.textContent || "",
+          genre: item.getElementsByTagName("genrenm")[0]?.textContent || "",
+          startDate: item.getElementsByTagName("prfpdfrom")[0]?.textContent || "",
+          endDate: item.getElementsByTagName("prfpdto")[0]?.textContent || "",
+          poster: item.getElementsByTagName("poster")[0]?.textContent || ""
+        }));
+
+        // 정렬 적용 및 화면 렌더링
+        const sortedList = sortEvents(eventList);
+        renderList(sortedList);
+
+      } catch (error) {
+        console.error("데이터 파싱 실패:", error);
+      }
+    }
+
     /**
-     * 조건 3 & 4: 미술/전시 우선 + 유명 미술관 최상단 정렬 함수
+     * 미술/전시 우선 + 유명 미술관 최상단 정렬 함수
      */
     function sortEvents(events) {
       return events.sort((a, b) => {
         const isArtA = isArtGenre(a.genre);
         const isArtB = isArtGenre(b.genre);
 
-        // 조건 3: 미술/전시가 우선, 음악/연주회는 후순위
+        // 1순위: 미술/전시가 우선, 음악/연주회는 후순위
         if (isArtA && !isArtB) return -1;
         if (!isArtA && isArtB) return 1;
 
-        // 조건 4: 유명/대형 미술관 상단 나열
+        // 2순위: 유명/대형 미술관 상단 나열
         const famousIndexA = getFamousIndex(a.facility);
         const famousIndexB = getFamousIndex(b.facility);
 
         if (famousIndexA !== -1 && famousIndexB !== -1) {
-          return famousIndexA - famousIndexB; // 유명 목록 지정 순서대로
+          return famousIndexA - famousIndexB;
         }
         if (famousIndexA !== -1) return -1;
         if (famousIndexB !== -1) return 1;
 
-        // 기타 기본 정렬 (시설명 순)
         return a.facility.localeCompare(b.facility);
       });
     }
 
-    // 미술/전시 관련 장르 판별 보조 함수
     function isArtGenre(genre) {
       const artKeywords = ["미술", "전시", "복합", "서커스/마술"];
       return artKeywords.some(keyword => genre.includes(keyword));
     }
 
-    // 유명 미술관 여부 및 인덱스 반환 함수
     function getFamousIndex(facilityName) {
       return FAMOUS_MUSEUMS.findIndex(museum => facilityName.includes(museum));
     }
 
     /**
-     * 화면 렌더링 함수 (조건 4: 왼쪽에 글자 배치)
+     * 화면 렌더링 함수
      */
     function renderList(events) {
       const container = document.getElementById("event-list");
@@ -290,7 +307,7 @@
       });
     }
 
-    // 앱 실행
+    // 실행
     fetchArtEvents();
   </script>
 </body>
