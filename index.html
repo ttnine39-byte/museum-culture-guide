@@ -3,14 +3,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>서울 미술관 및 문화행사 실시간 가이드</title>
+    <title>서울 문화 전시 가이드 | 아트하트❤️</title>
     <!-- 네이버 지도 API -->
     <script type="text/javascript" src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=7ji395imrd"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Malgun Gothic', -apple-system, sans-serif; }
-        body { display: flex; flex-direction: column; height: 100vh; background: #f5f5f5; }
-        header { background: #111; color: #fff; padding: 15px 20px; text-align: left; font-size: 1.2rem; font-weight: bold; box-shadow: 0 2px 5px rgba(0,0,0,0.2); z-index: 10; }
+        body { display: flex; flex-direction: column; height: 100vh; background: #f5f5f5; user-select: none; }
         
+        /* 헤더 레이아웃 개편 (아트하트 중앙 배치) */
+        header { 
+            background: #111; 
+            color: #fff; 
+            padding: 15px 20px; 
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            align-items: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2); 
+            z-index: 10; 
+        }
+        .header-title { font-size: 1.1rem; font-weight: bold; color: #ddd; }
+        .header-brand { font-size: 1.3rem; font-weight: 800; color: #ff4757; text-align: center; letter-spacing: 1px; }
+        .header-copyright { font-size: 0.75rem; color: #777; text-align: right; }
+
         /* 컨트롤 & 필터 바 */
         .filter-wrapper { padding: 14px 20px; background: #222; display: flex; flex-direction: column; gap: 10px; z-index: 10; }
         .filter-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; color: #fff; font-size: 0.9rem; }
@@ -33,7 +47,7 @@
         #gallery-list { flex: 1; overflow-y: auto; padding: 15px; }
         #map { flex: 1; height: 100%; } 
         
-        /* 카드 UI 개선 (이미지 레이아웃) */
+        /* 카드 UI */
         .gallery-card { display: flex; gap: 12px; background: #fff; padding: 14px; margin-bottom: 12px; border-radius: 8px; border: 1px solid #e2e8f0; cursor: pointer; transition: all 0.2s ease; }
         .gallery-card:hover { border-color: #00c73c; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
         .card-img { width: 85px; height: 110px; border-radius: 6px; object-fit: cover; background: #eee; flex-shrink: 0; }
@@ -61,6 +75,8 @@
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         
         @media (max-width: 768px) {
+            header { grid-template-columns: 1fr; gap: 5px; text-align: center; }
+            .header-copyright { text-align: center; }
             .container { flex-direction: column-reverse; }
             .sidebar { width: 100%; height: 50vh; }
             #map { height: 50vh; }
@@ -70,7 +86,12 @@
 </head>
 <body>
 
-    <header>🎨 서울 주요 문화행사 및 전시 가이드</header>
+    <!-- 헤더 영역 -->
+    <header>
+        <div class="header-title">서울 문화 전시 가이드</div>
+        <div class="header-brand">아트하트❤️</div>
+        <div class="header-copyright">© ArtHeart. All rights reserved.</div>
+    </header>
     
     <!-- 필터 영역 -->
     <div class="filter-wrapper">
@@ -80,7 +101,7 @@
             <button class="btn-genre active" onclick="setGenre('all', this)">전체</button>
             <button class="btn-genre" onclick="setGenre('art', this)">🎨 미술/전시</button>
             <button class="btn-genre" onclick="setGenre('music', this)">🎵 음악회/연주회</button>
-            <button class="btn-genre" onclick="setGenre('culture', this)">🏛️ 기타 문화</button>
+            <button class="btn-genre" onclick="setGenre('culture', this)">🏛️ 기타 문화/워크숍</button>
         </div>
 
         <!-- 2. 기간 필터 -->
@@ -135,7 +156,15 @@
         let currentPage = 1;
         const itemsPerPage = 10;
 
-        // 주요 미술관 예외 좌표 매칭 데이터
+        // 마우스 우클릭 및 개발자도구 일부 방지 (무단 복제 방어)
+        document.addEventListener('contextmenu', event => event.preventDefault());
+        document.addEventListener('keydown', event => {
+            if (event.key === 'F12' || (event.ctrlKey && event.shiftKey && (event.key === 'I' || event.key === 'J'))) {
+                event.preventDefault();
+            }
+        });
+
+        // 주요 미술관 좌표
         const galleryBaseData = {
             "국립현대미술관 서울": { keywords: ["국립현대", "MMCA"], lat: 37.5786, lng: 126.9801 },
             "서울시립미술관 본관": { keywords: ["서울시립", "SeMA"], lat: 37.5641, lng: 126.9738 },
@@ -156,7 +185,7 @@
         const paginationContainer = document.getElementById('pagination');
         const loadingOverlay = document.getElementById('loading-overlay');
 
-        // 백엔드 API 호출
+        // API 데이터 로드
         async function loadExhibitions() {
             try {
                 const response = await fetch('https://museum-culture-guide-1.onrender.com/api/exhibitions');
@@ -174,7 +203,6 @@
             }
         }
 
-        // 장르 선택
         function setGenre(genre, btn) {
             currentGenre = genre;
             document.querySelectorAll('.btn-genre').forEach(b => b.classList.remove('active'));
@@ -182,7 +210,6 @@
             applyFilters();
         }
 
-        // 기간 선택
         function setPeriod(period, btn) {
             currentPeriod = period;
             document.querySelectorAll('.btn-period').forEach(b => b.classList.remove('active'));
@@ -190,34 +217,38 @@
             applyFilters();
         }
 
-        // 7번 요구사항: 장르 정밀 분류 (음악회 우선 판별 로직)
+        // 장르 정밀 분류 (워크숍/클래스/체험 키워드는 기타문화로 처리)
         function getCategoryType(item) {
             const title = (item.TITLE || item.CODENAME || '').toLowerCase();
             const place = (item.PLACE || '').toLowerCase();
             const codeName = (item.CODENAME || item.PROGRAM || '').toLowerCase();
             const combinedText = `${title} ${place} ${codeName}`;
 
-            // 음악 관련 핵심 키워드 목록 (미술관에서 열리더라도 음악회로 분류)
+            // 1. 워크숍/교육/체험 관련 키워드 -> 기타문화로 최우선 분류
+            const cultureKeywords = ['워크숍', '클래스', '체험', '강좌', '교육', '아카데미', '세미나', '포럼', '박물관'];
+            if (cultureKeywords.some(kw => combinedText.includes(kw))) {
+                return 'culture';
+            }
+
+            // 2. 음악 관련 키워드 -> 음악회 분류
             const musicKeywords = [
                 '음악회', '연주회', '콘서트', '오케스트라', '클래식', '독주회', 
                 '성악', '국악', '합창', '바이올린', '피아노', '리사이틀', '첼로', '교향악'
             ];
-
             if (musicKeywords.some(kw => combinedText.includes(kw))) {
                 return 'music';
             }
 
-            // 전시/미술 키워드
+            // 3. 전시/미술 키워드 -> 전시 분류
             const artKeywords = ['전시', '미술', '갤러리', '비엔날레', '사진전', '회화', '특별전', '조각', '기획전'];
             if (artKeywords.some(kw => combinedText.includes(kw))) {
                 return 'art';
             }
 
-            // 그 외 박물관/체험/문화행사
             return 'culture';
         }
 
-        // 2번 요구사항: 날짜 문자열 안전 파싱 함수 (YYYYMMDD, YYYY-MM-DD 대응)
+        // 날짜 파싱 유틸리티
         function parseYYYYMMDD(dateStr) {
             if (!dateStr) return null;
             const nums = dateStr.toString().replace(/[^0-9]/g, '');
@@ -230,7 +261,7 @@
             return new Date(year, month, day);
         }
 
-        // 3번 및 전체 통합 필터 실행
+        // 통합 필터
         function applyFilters() {
             currentPage = 1;
             const today = new Date();
@@ -243,23 +274,19 @@
                 const title = (item.TITLE || item.CODENAME || '').toLowerCase();
                 const place = (item.PLACE || item.GUNAME || '').toLowerCase();
 
-                // 1. 키워드 검색
                 if (searchKeyword && !title.includes(searchKeyword) && !place.includes(searchKeyword)) {
                     return false;
                 }
 
-                // 2. 자치구 필터
                 if (selectedDistrict !== 'all' && !place.includes(selectedDistrict.toLowerCase())) {
                     return false;
                 }
 
-                // 3. 장르 필터
                 const categoryType = getCategoryType(item);
                 if (currentGenre === 'art' && categoryType !== 'art') return false;
                 if (currentGenre === 'music' && categoryType !== 'music') return false;
                 if (currentGenre === 'culture' && categoryType !== 'culture') return false;
 
-                // 4. 기간 필터
                 if (currentPeriod !== 'all') {
                     const rawDate = item.DATE || `${item.STRTDATE || ''} ~ ${item.END_DATE || ''}`;
                     const dates = rawDate.split('~');
@@ -267,11 +294,9 @@
                     const endDate = parseYYYYMMDD(dates[1] || dates[0]);
 
                     if (currentPeriod === 'current') {
-                        // 오늘이 진행 기간 내에 들어있는지 확인
                         if (startDate && startDate > today) return false;
                         if (endDate && endDate < today) return false;
                     } else if (currentPeriod === 'upcoming') {
-                        // 오픈 전인 행사
                         if (!startDate || startDate <= today) return false;
                     }
                 }
@@ -279,14 +304,11 @@
                 return true;
             });
 
-            // 1번 요구사항: 지도에는 필터링된 전체 결과의 마커를 표시
             renderAllMarkersOnMap(filteredData);
-            
-            // 목록 및 페이지네이션 갱신
             renderPageList();
         }
 
-        // 1번 요구사항 해결: 검색 결과의 전체 위치를 지도 마커로 생성
+        // 전체 데이터 마커 생성
         function renderAllMarkersOnMap(items) {
             clearMapMarkers();
 
@@ -316,7 +338,6 @@
                         title: title
                     });
 
-                    // 4번 요구사항: 포스터 이미지 정보 활용 인포윈도우
                     const imgUrl = item.MAIN_IMG || item.IMAGE || 'https://via.placeholder.com/80x100?text=No+Image';
                     const infoWindow = new naver.maps.InfoWindow({
                         content: `<div style="padding:10px; display:flex; gap:10px; min-width:220px; max-width:280px;">
@@ -347,7 +368,7 @@
             });
         }
 
-        // 현재 페이지의 목록 카드 생성
+        // 카드 리스트 렌더링
         function renderPageList() {
             listContainer.innerHTML = '';
             listContainer.scrollTop = 0;
@@ -367,8 +388,6 @@
                 const date = item.DATE || `${item.STRTDATE || ''} ~ ${item.END_DATE || ''}` || '일정 미정';
                 const source = item.SOURCE || '서울시';
                 const orgLink = item.ORG_LINK || item.URL || '#';
-                
-                // 4번 요구사항: 백엔드 이미지 URL 반영 및 에러 처리
                 const imgUrl = item.MAIN_IMG || item.IMAGE || 'https://via.placeholder.com/85x110?text=No+Image';
                 
                 const categoryType = getCategoryType(item);
@@ -394,7 +413,6 @@
                     </div>
                 `;
 
-                // 카드 클릭 시 지도의 마커로 포커스
                 if (item._position && item._infoWindow) {
                     card.addEventListener('click', () => {
                         map.panTo(item._position);
@@ -409,7 +427,7 @@
             renderPaginationControls();
         }
 
-        // 페이지네이션 버튼
+        // 페이지네이션
         function renderPaginationControls() {
             paginationContainer.innerHTML = '';
             const totalPages = Math.ceil(filteredData.length / itemsPerPage);
