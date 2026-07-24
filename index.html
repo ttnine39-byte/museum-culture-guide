@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>아트하트 - 공연/전시 정보</title>
+  <title>아트하트❤️ - 공연/전시 정보</title>
   <style>
     /* 기본 레이아웃 및 스타일 */
     * {
@@ -19,7 +19,7 @@
       padding: 20px;
     }
 
-    /* 헤더 및 로고 타이틀 (아트: 흰색, 하트: 분홍색) */
+    /* 헤더 및 로고 타이틀 (조건 1: 아트하트❤️ 전체 흰색 글자) */
     header {
       text-align: left;
       padding: 20px 0 30px 0;
@@ -31,14 +31,7 @@
       font-size: 2.2rem;
       font-weight: 800;
       letter-spacing: -1px;
-    }
-
-    .text-white {
-      color: #ffffff; /* '아트': 흰색 */
-    }
-
-    .text-pink {
-      color: #ff6b81; /* '하트': 분홍색 */
+      color: #ffffff; /* 글자 전체 흰색 */
     }
 
     /* 메인 컨테이너 */
@@ -71,7 +64,7 @@
     /* 왼쪽 글자 정보 영역 */
     .event-info {
       flex: 1;
-      text-align: left; /* 왼쪽 정렬 강제 */
+      text-align: left; /* 왼쪽 정렬 */
       display: flex;
       flex-direction: column;
       justify-content: center;
@@ -125,35 +118,44 @@
       color: #888888;
     }
 
-    /* 로딩 상태 표시 */
+    /* 로딩 및 안내 메시지 */
     .loading {
       text-align: center;
       padding: 50px 0;
       color: #888888;
       font-size: 1.1rem;
     }
+
+    .notice-bar {
+      background-color: #2a1a1f;
+      border: 1px solid #ff6b81;
+      color: #ff8fa3;
+      padding: 10px 16px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      font-size: 0.85rem;
+    }
   </style>
 </head>
 <body>
 
   <div class="container">
-    <!-- 헤더 영역 -->
+    <!-- 헤더 영역 (아트하트❤️ 전체 흰색) -->
     <header>
-      <h1 class="logo-title">
-        <span class="text-white">아트</span><span class="text-pink">하트</span>
-      </h1>
+      <h1 class="logo-title">아트하트❤️</h1>
     </header>
+
+    <div id="notice-area"></div>
 
     <!-- 이벤트 리스트 영역 -->
     <main>
       <div id="event-list" class="event-list">
-        <div class="loading">KOPIS 데이터를 안전하게 불러오는 중입니다...</div>
+        <div class="loading">공연/전시 데이터를 불러오는 중입니다...</div>
       </div>
     </main>
   </div>
 
   <script>
-    // 1. KOPIS API 키
     const KOPIS_API_KEY = "4650ca9b3cd14d5eb489f753faf9d070";
 
     // 유명/대형 미술관 및 주요 전시장 우선순위 리스트
@@ -174,82 +176,132 @@
       "전북도립미술관"
     ];
 
+    // CORS 차단 발생 시 대체 표시될 백업 데이터 세트 (전시/미술 중심)
+    const FALLBACK_DATA = [
+      {
+        id: "PF200001",
+        title: "2026 현대미술 특별전: 빛과 공간의 울림",
+        facility: "국립현대미술관 서울",
+        genre: "미술",
+        startDate: "2026.05.01",
+        endDate: "2026.10.31"
+      },
+      {
+        id: "PF200002",
+        title: "거장들의 기획전: 르네상스에서 현대까지",
+        facility: "서울시립미술관",
+        genre: "미술",
+        startDate: "2026.06.15",
+        endDate: "2026.09.20"
+      },
+      {
+        id: "PF200003",
+        title: "한가람 미술 대축제 2026",
+        facility: "예술의전당 한가람미술관",
+        genre: "미술",
+        startDate: "2026.07.01",
+        endDate: "2026.12.31"
+      },
+      {
+        id: "PF200004",
+        title: "미디어 아웃사이드: 디지털 아트 에디션",
+        facility: "DDP 동대문디자인플라자",
+        genre: "전시",
+        startDate: "2026.04.10",
+        endDate: "2026.08.30"
+      },
+      {
+        id: "PF200005",
+        title: "한국 현대 미학 컬렉션",
+        facility: "리움미술관",
+        genre: "미술",
+        startDate: "2026.05.20",
+        endDate: "2026.11.15"
+      },
+      {
+        id: "PF200006",
+        title: "여름 교향악 축제 오케스트라",
+        facility: "세종문화회관",
+        genre: "음악/연주회",
+        startDate: "2026.08.01",
+        endDate: "2026.08.15"
+      }
+    ];
+
     /**
-     * KOPIS API 데이터 연동 함수 (다중 프록시 안전 장치 적용)
+     * API 호출 및 예외 처리
      */
-    async function fetchArtEvents() {
+    async function loadEvents() {
       const today = new Date();
       const stdate = today.toISOString().slice(0, 10).replace(/-/g, "");
       const eddate = "20261231";
+      
+      const targetUrl = `https://www.kopis.or.kr/openApi/rest/pblprfr?service=${KOPIS_API_KEY}&stdate=${stdate}&eddate=${eddate}&cpage=1&rows=100&prfstate=02`;
 
-      const targetUrl = `http://www.kopis.or.kr/openApi/rest/pblprfr?service=${KOPIS_API_KEY}&stdate=${stdate}&eddate=${eddate}&cpage=1&rows=100&prfstate=02`;
-
-      // 안정적인 우회 프록시 URL 후보군
-      const proxies = [
-        `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
-        `https://cors-anywhere.herokuapp.com/${targetUrl}`
-      ];
-
-      let xmlText = null;
-
-      // 성공할 때까지 순차적으로 프록시 시도
-      for (const proxyUrl of proxies) {
-        try {
-          const response = await fetch(proxyUrl);
-          if (response.ok) {
-            xmlText = await response.text();
-            if (xmlText && xmlText.includes("<db>")) break; // 데이터 정상 수신 확인
-          }
-        } catch (e) {
-          console.warn("프록시 연결 재시도 중...", e);
-        }
-      }
-
-      if (!xmlText) {
-        document.getElementById("event-list").innerHTML = 
-          `<div class="loading">데이터를 불러올 수 없습니다.<br>로컬 파일(file://)로 바로 실행 중이시라면 웹 서버 환경이나 Chrome CORS 확장 프로그램을 켜고 실행해 보세요.</div>`;
-        return;
-      }
-
+      // API 테스트 (CORS 허용 브라우저/서버 환경)
       try {
-        // XML 데이터 파싱
-        const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(xmlText, "text/xml");
-        const items = Array.from(xmlDoc.getElementsByTagName("db"));
+        const response = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`);
+        
+        if (!response.ok) throw new Error("네트워크 응답 오류");
+        
+        const data = await response.json();
+        
+        if (data.contents && data.contents.includes("<db>")) {
+          const parser = new DOMParser();
+          const xmlDoc = parser.parseFromString(data.contents, "text/xml");
+          const items = Array.from(xmlDoc.getElementsByTagName("db"));
 
-        // 객체 형태로 변환
-        const eventList = items.map(item => ({
-          id: item.getElementsByTagName("mt20")[0]?.textContent || "",
-          title: item.getElementsByTagName("prfnm")[0]?.textContent || "",
-          facility: item.getElementsByTagName("fcltynm")[0]?.textContent || "",
-          genre: item.getElementsByTagName("genrenm")[0]?.textContent || "",
-          startDate: item.getElementsByTagName("prfpdfrom")[0]?.textContent || "",
-          endDate: item.getElementsByTagName("prfpdto")[0]?.textContent || "",
-          poster: item.getElementsByTagName("poster")[0]?.textContent || ""
-        }));
+          const eventList = items.map(item => ({
+            id: item.getElementsByTagName("mt20")[0]?.textContent || "",
+            title: item.getElementsByTagName("prfnm")[0]?.textContent || "",
+            facility: item.getElementsByTagName("fcltynm")[0]?.textContent || "",
+            genre: item.getElementsByTagName("genrenm")[0]?.textContent || "",
+            startDate: item.getElementsByTagName("prfpdfrom")[0]?.textContent || "",
+            endDate: item.getElementsByTagName("prfpdto")[0]?.textContent || ""
+          }));
 
-        // 정렬 적용 및 화면 렌더링
-        const sortedList = sortEvents(eventList);
-        renderList(sortedList);
-
-      } catch (error) {
-        console.error("데이터 파싱 실패:", error);
+          processAndRender(eventList);
+          return;
+        }
+        throw new Error("정상 XML 데이터를 가져오지 못함");
+      } catch (err) {
+        console.warn("CORS/네트워크 차단으로 백업 데이터 모드로 전환됩니다.", err);
+        
+        // 브라우저 직접 실행(file://) 등 CORS 차단 시 백업 데이터로 즉시 화면 표시
+        showNotice("💡 KOPIS API 브라우저 보안 차단(CORS) 정책으로 인해 샘플 데이터 목록을 표시합니다.");
+        processAndRender(FALLBACK_DATA);
       }
     }
 
     /**
-     * 미술/전시 우선 + 유명 미술관 최상단 정렬 함수
+     * 안내 메시지 바 표시
+     */
+    function showNotice(msg) {
+      const noticeArea = document.getElementById("notice-area");
+      noticeArea.innerHTML = `<div class="notice-bar">${msg}</div>`;
+    }
+
+    /**
+     * 정렬 처리 및 렌더링
+     */
+    function processAndRender(events) {
+      const sortedList = sortEvents(events);
+      renderList(sortedList);
+    }
+
+    /**
+     * 미술/전시 우선 + 주요 미술관 최상단 정렬 함수
      */
     function sortEvents(events) {
       return events.sort((a, b) => {
         const isArtA = isArtGenre(a.genre);
         const isArtB = isArtGenre(b.genre);
 
-        // 1순위: 미술/전시가 우선, 음악/연주회는 후순위
+        // 1. 미술/전시 우선
         if (isArtA && !isArtB) return -1;
         if (!isArtA && isArtB) return 1;
 
-        // 2순위: 유명/대형 미술관 상단 나열
+        // 2. 주요 미술관 최상단 배치
         const famousIndexA = getFamousIndex(a.facility);
         const famousIndexB = getFamousIndex(b.facility);
 
@@ -280,7 +332,7 @@
       container.innerHTML = "";
 
       if (events.length === 0) {
-        container.innerHTML = `<div class="loading">조회된 공연/전시 정보가 없습니다.</div>`;
+        container.innerHTML = `<div class="loading">조회된 정보가 없습니다.</div>`;
         return;
       }
 
@@ -307,8 +359,8 @@
       });
     }
 
-    // 실행
-    fetchArtEvents();
+    // 앱 실행
+    loadEvents();
   </script>
 </body>
 </html>
