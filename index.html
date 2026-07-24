@@ -178,47 +178,45 @@
      * KOPIS API 데이터 연동 함수
      */
     async function fetchArtEvents() {
-      // 오늘 날짜 및 연말 기준 날짜 설정 (YYYYMMDD)
-      const today = new Date();
-      const stdate = today.toISOString().slice(0, 10).replace(/-/g, "");
-      const eddate = "20261231";
+  const today = new Date();
+  const stdate = today.toISOString().slice(0, 10).replace(/-/g, "");
+  const eddate = "20261231";
 
-      // KOPIS 오픈 API URL (공연/전시 목록)
-      const url = `https://www.kopis.or.kr/openApi/rest/pblprfr?service=${KOPIS_API_KEY}&stdate=${stdate}&eddate=${eddate}&cpage=1&rows=100&prfstate=02`;
+  // KOPIS 원본 API URL
+  const targetUrl = `https://www.kopis.or.kr/openApi/rest/pblprfr?service=${KOPIS_API_KEY}&stdate=${stdate}&eddate=${eddate}&cpage=1&rows=100&prfstate=02`;
 
-      try {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error("API Network response was not ok");
-        
-        const xmlText = await response.text();
-        
-        // XML 데이터 파싱
-        const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(xmlText, "text/xml");
-        const items = Array.from(xmlDoc.getElementsByTagName("db"));
+  // corsproxy.io 우회 서비스 적용
+  const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
 
-        // 객체 형태로 변환
-        const eventList = items.map(item => ({
-          id: item.getElementsByTagName("mt20")[0]?.textContent || "",
-          title: item.getElementsByTagName("prfnm")[0]?.textContent || "",
-          facility: item.getElementsByTagName("fcltynm")[0]?.textContent || "",
-          genre: item.getElementsByTagName("genrenm")[0]?.textContent || "",
-          startDate: item.getElementsByTagName("prfpdfrom")[0]?.textContent || "",
-          endDate: item.getElementsByTagName("prfpdto")[0]?.textContent || "",
-          poster: item.getElementsByTagName("poster")[0]?.textContent || ""
-        }));
+  try {
+    const response = await fetch(proxyUrl);
+    if (!response.ok) throw new Error("API 요청 실패");
+    
+    const xmlText = await response.text();
+    
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+    const items = Array.from(xmlDoc.getElementsByTagName("db"));
 
-        // 정렬 적용 및 화면 렌더링
-        const sortedList = sortEvents(eventList);
-        renderList(sortedList);
+    const eventList = items.map(item => ({
+      id: item.getElementsByTagName("mt20")[0]?.textContent || "",
+      title: item.getElementsByTagName("prfnm")[0]?.textContent || "",
+      facility: item.getElementsByTagName("fcltynm")[0]?.textContent || "",
+      genre: item.getElementsByTagName("genrenm")[0]?.textContent || "",
+      startDate: item.getElementsByTagName("prfpdfrom")[0]?.textContent || "",
+      endDate: item.getElementsByTagName("prfpdto")[0]?.textContent || "",
+      poster: item.getElementsByTagName("poster")[0]?.textContent || ""
+    }));
 
-      } catch (error) {
-        console.error("KOPIS API 호출 실패:", error);
-        document.getElementById("event-list").innerHTML = 
-          `<div class="loading">데이터를 불러오는 데 실패했습니다.<br>CORS 정책 문제 시 프록시 서버 연동이 필요할 수 있습니다.</div>`;
-      }
-    }
+    const sortedList = sortEvents(eventList);
+    renderList(sortedList);
 
+  } catch (error) {
+    console.error("KOPIS API 호출 실패:", error);
+    document.getElementById("event-list").innerHTML = 
+      `<div class="loading">데이터를 불러오는 데 실패했습니다. 다시 시도해 주세요.</div>`;
+  }
+}
     /**
      * 조건 3 & 4: 미술/전시 우선 + 유명 미술관 최상단 정렬 함수
      */
