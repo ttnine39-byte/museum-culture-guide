@@ -55,6 +55,7 @@
         
         .badge { display: inline-block; padding: 2px 7px; font-size: 0.72rem; color: #fff; background: #00c73c; border-radius: 10px; font-weight: normal; }
         .badge.seoul { background: #007bff; }
+        .badge.kopis { background: #ff4757; }
         .badge.category { background: #6c757d; margin-left: 3px; }
         
         .gallery-name { font-size: 0.85rem; color: #666; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -136,7 +137,7 @@
         <!-- 로딩 표시기 -->
         <div id="loading-overlay">
             <div class="spinner"></div>
-            <p style="margin-top: 12px; font-weight: bold; color: #333;">서울시 전시/행사 데이터를 불러오는 중...</p>
+            <p style="margin-top: 12px; font-weight: bold; color: #333;">서울시 및 KOPIS 데이터를 불러오는 중...</p>
         </div>
 
         <div class="sidebar">
@@ -155,8 +156,9 @@
         let activeMarkers = [];
         let currentPage = 1;
         const itemsPerPage = 10;
+        const KOPIS_API_KEY = "4650ca9b3cd14d5eb489f753faf9d070";
 
-        // 마우스 우클릭 및 개발자도구 일부 방지 (무단 복제 방어)
+        // 마우스 우클릭 및 개발자도구 일부 방지
         document.addEventListener('contextmenu', event => event.preventDefault());
         document.addEventListener('keydown', event => {
             if (event.key === 'F12' || (event.ctrlKey && event.shiftKey && (event.key === 'I' || event.key === 'J'))) {
@@ -164,13 +166,16 @@
             }
         });
 
-        // 주요 미술관 좌표
+        // 주요 미술관/공연장 좌표 매핑 보완 데이터
         const galleryBaseData = {
             "국립현대미술관 서울": { keywords: ["국립현대", "MMCA"], lat: 37.5786, lng: 126.9801 },
             "서울시립미술관 본관": { keywords: ["서울시립", "SeMA"], lat: 37.5641, lng: 126.9738 },
             "리움미술관": { keywords: ["리움", "Leeum"], lat: 37.5384, lng: 126.9996 },
-            "예술의전당": { keywords: ["예술의전당", "한가람"], lat: 37.4785, lng: 127.0118 },
-            "세종문화회관": { keywords: ["세종문화회관", "세종미술관"], lat: 37.5724, lng: 126.9755 }
+            "예술의전당": { keywords: ["예술의전당", "한가람", "오페라극장"], lat: 37.4785, lng: 127.0118 },
+            "세종문화회관": { keywords: ["세종문화회관", "세종미술관", "세종대극장"], lat: 37.5724, lng: 126.9755 },
+            "국립극장": { keywords: ["국립극장", "해오름극장"], lat: 37.5522, lng: 127.0000 },
+            "샤롯데씨어터": { keywords: ["샤롯데"], lat: 37.5113, lng: 127.0980 },
+            "대학로": { keywords: ["대학로", "혜화"], lat: 37.5821, lng: 127.0019 }
         };
 
         // 네이버 지도 생성
@@ -185,22 +190,63 @@
         const paginationContainer = document.getElementById('pagination');
         const loadingOverlay = document.getElementById('loading-overlay');
 
-        // API 데이터 로드
+        // 기존 API + KOPIS API 동시 로드
         async function loadExhibitions() {
             try {
-                const response = await fetch('https://museum-culture-guide-1.onrender.com/api/exhibitions');
-                const result = await response.json();
+                // 1. 기존 Render 백엔드 데이터
+                const renderPromise = fetch('https://museum-culture-guide-1.onrender.com/api/exhibitions')
+                    .then(res => res.json())
+                    .then(result => result.status === 'success' ? result.data : [])
+                    .catch(() => []);
+
+                // 2. KOPIS Open API 데이터
+                const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+                const kopisUrl = `https://www.kopis.or.kr/openApi/rest/pblprfr?service=${KOPIS_API_KEY}&stdate=${todayStr}&eddate=20261231&cpage=1&rows=100&prfstate=02&signgucode=11`;
                 
-                if (result.status === 'success') {
-                    rawExhibitionsData = result.data;
-                    applyFilters(); 
-                }
+                const kopisPromise = fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(kopisUrl)}`)
+                    .then(res => res.json())
+                    .then(json => json.contents ? parseKopisXml(json.contents) : [])
+                    .catch(() => []);
+
+                const [renderData, kopisData] = await Promise.all([renderPromise, kopisPromise]);
+                
+                rawExhibitionsData = [...renderData, ...kopisData];
+                applyFilters(); 
+
             } catch (error) {
                 console.error('데이터 로드 실패:', error);
-                listContainer.innerHTML = '<div style="padding:20px; color:red; text-align:center;">데이터를 불러오지 못했습니다. 서버 상태를 확인해 주세요.</div>';
+                listContainer.innerHTML = '<div style="padding:20px; color:red; text-align:center;">데이터를 불러오지 못했습니다. 네트워크 상태를 확인해 주세요.</div>';
             } finally {
                 loadingOverlay.style.display = 'none';
             }
+        }
+
+        // KOPIS XML 파싱 및 기존 포맷 변환
+        function parseKopisXml(xmlText) {
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+            const items = Array.from(xmlDoc.getElementsByTagName("db"));
+
+            return items.map(item => {
+                const title = item.getElementsByTagName("prfnm")[0]?.textContent || "";
+                const place = item.getElementsByTagName("fcltynm")[0]?.textContent || "";
+                const startDate = item.getElementsByTagName("prfpdfrom")[0]?.textContent || "";
+                const endDate = item.getElementsByTagName("prfpdto")[0]?.textContent || "";
+                const genre = item.getElementsByTagName("genrenm")[0]?.textContent || "";
+                const img = item.getElementsByTagName("poster")[0]?.textContent || "";
+
+                return {
+                    TITLE: title,
+                    PLACE: place,
+                    DATE: `${startDate} ~ ${endDate}`,
+                    STRTDATE: startDate,
+                    END_DATE: endDate,
+                    CODENAME: genre,
+                    SOURCE: 'KOPIS',
+                    MAIN_IMG: img,
+                    ORG_LINK: `https://m.map.naver.com/search2/search.naver?query=${encodeURIComponent(place)}`
+                };
+            });
         }
 
         function setGenre(genre, btn) {
@@ -217,7 +263,7 @@
             applyFilters();
         }
 
-        // 장르 정밀 분류 (워크숍/클래스/체험 키워드는 기타문화로 처리)
+        // 장르 정밀 분류
         function getCategoryType(item) {
             const title = (item.TITLE || item.CODENAME || '').toLowerCase();
             const place = (item.PLACE || '').toLowerCase();
@@ -225,22 +271,22 @@
             const combinedText = `${title} ${place} ${codeName}`;
 
             // 1. 워크숍/교육/체험 관련 키워드 -> 기타문화로 최우선 분류
-            const cultureKeywords = ['워크숍', '클래스', '체험', '강좌', '교육', '아카데미', '세미나', '포럼', '박물관'];
+            const cultureKeywords = ['워크숍', '클래스', '체험', '강좌', '교육', '아카데미', '세미나', '포럼', '박물관', '대중무용'];
             if (cultureKeywords.some(kw => combinedText.includes(kw))) {
                 return 'culture';
             }
 
-            // 2. 음악 관련 키워드 -> 음악회 분류
+            // 2. 음악/공연/연극 관련 키워드 -> 음악회 분류
             const musicKeywords = [
                 '음악회', '연주회', '콘서트', '오케스트라', '클래식', '독주회', 
-                '성악', '국악', '합창', '바이올린', '피아노', '리사이틀', '첼로', '교향악'
+                '성악', '국악', '합창', '바이올린', '피아노', '리사이틀', '첼로', '교향악', '뮤지컬', '연극', '무용'
             ];
             if (musicKeywords.some(kw => combinedText.includes(kw))) {
                 return 'music';
             }
 
             // 3. 전시/미술 키워드 -> 전시 분류
-            const artKeywords = ['전시', '미술', '갤러리', '비엔날레', '사진전', '회화', '특별전', '조각', '기획전'];
+            const artKeywords = ['전시', '미술', '갤러리', '비엔날레', '사진전', '회화', '특별전', '조각', '기획전', '서양화', '동양화'];
             if (artKeywords.some(kw => combinedText.includes(kw))) {
                 return 'art';
             }
@@ -330,41 +376,45 @@
                     }
                 }
 
-                if (!isNaN(lat) && !isNaN(lng)) {
-                    const position = new naver.maps.LatLng(lat, lng);
-                    const marker = new naver.maps.Marker({
-                        position: position,
-                        map: map,
-                        title: title
-                    });
-
-                    const imgUrl = item.MAIN_IMG || item.IMAGE || 'https://via.placeholder.com/80x100?text=No+Image';
-                    const infoWindow = new naver.maps.InfoWindow({
-                        content: `<div style="padding:10px; display:flex; gap:10px; min-width:220px; max-width:280px;">
-                                    <img src="${imgUrl}" style="width:50px; height:65px; object-fit:cover; border-radius:4px;" onerror="this.src='https://via.placeholder.com/50x65?text=No+Image'">
-                                    <div>
-                                        <strong style="font-size:12px; color:#111;">${place}</strong><br/>
-                                        <span style="color:#00c73c; font-weight:bold; font-size:12px;">${title}</span><br/>
-                                        <span style="color:#666; font-size:11px;">📅 ${date}</span>
-                                    </div>
-                                  </div>`,
-                        borderWidth: 1, borderColor: "#00c73c"
-                    });
-
-                    naver.maps.Event.addListener(marker, 'click', function() {
-                        if (infoWindow.getMap()) {
-                            infoWindow.close();
-                        } else {
-                            infoWindow.open(map, marker);
-                            map.panTo(position);
-                        }
-                    });
-
-                    item._marker = marker;
-                    item._infoWindow = infoWindow;
-                    item._position = position;
-                    activeMarkers.push(marker);
+                // 기본 좌표가 지정되지 않은 경우 서울시청 기준 약간의 오프셋
+                if (isNaN(lat) || isNaN(lng)) {
+                    lat = 37.5665 + (Math.random() - 0.5) * 0.04;
+                    lng = 126.9780 + (Math.random() - 0.5) * 0.04;
                 }
+
+                const position = new naver.maps.LatLng(lat, lng);
+                const marker = new naver.maps.Marker({
+                    position: position,
+                    map: map,
+                    title: title
+                });
+
+                const imgUrl = item.MAIN_IMG || item.IMAGE || 'https://via.placeholder.com/80x100?text=No+Image';
+                const infoWindow = new naver.maps.InfoWindow({
+                    content: `<div style="padding:10px; display:flex; gap:10px; min-width:220px; max-width:280px;">
+                                <img src="${imgUrl}" style="width:50px; height:65px; object-fit:cover; border-radius:4px;" onerror="this.src='https://via.placeholder.com/50x65?text=No+Image'">
+                                <div>
+                                    <strong style="font-size:12px; color:#111;">${place}</strong><br/>
+                                    <span style="color:#00c73c; font-weight:bold; font-size:12px;">${title}</span><br/>
+                                    <span style="color:#666; font-size:11px;">📅 ${date}</span>
+                                </div>
+                              </div>`,
+                    borderWidth: 1, borderColor: "#00c73c"
+                });
+
+                naver.maps.Event.addListener(marker, 'click', function() {
+                    if (infoWindow.getMap()) {
+                        infoWindow.close();
+                    } else {
+                        infoWindow.open(map, marker);
+                        map.panTo(position);
+                    }
+                });
+
+                item._marker = marker;
+                item._infoWindow = infoWindow;
+                item._position = position;
+                activeMarkers.push(marker);
             });
         }
 
@@ -391,7 +441,7 @@
                 const imgUrl = item.MAIN_IMG || item.IMAGE || 'https://via.placeholder.com/85x110?text=No+Image';
                 
                 const categoryType = getCategoryType(item);
-                const categoryLabel = categoryType === 'art' ? '🎨 전시' : categoryType === 'music' ? '🎵 음악회' : '🏛️ 기타문화';
+                const categoryLabel = categoryType === 'art' ? '🎨 전시' : categoryType === 'music' ? '🎵 음악/공연' : '🏛️ 기타문화';
 
                 const card = document.createElement('div');
                 card.className = 'gallery-card';
@@ -400,7 +450,7 @@
                     <div class="card-content">
                         <div>
                             <div>
-                                <span class="badge ${source.includes('서울') ? 'seoul' : ''}">${source}</span>
+                                <span class="badge ${source === 'KOPIS' ? 'kopis' : (source.includes('서울') ? 'seoul' : '')}">${source}</span>
                                 <span class="badge category">${categoryLabel}</span>
                             </div>
                             <div class="exhibition-title">${title}</div>
